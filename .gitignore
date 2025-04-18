@@ -1,0 +1,6 @@
+.idea/*
+node_modules/
+resumes/
+videos/
+.env
+db.sqlite3
