@@ -4,3 +4,4 @@ resumes/
 videos/
 .env
 db.sqlite3
+interrogator-ui/build/

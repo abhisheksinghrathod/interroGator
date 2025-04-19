@@ -8,6 +8,7 @@ from .views import (
     FeedbackViewSet,
     VideoRecordingViewSet,
     CheatingFlagViewSet,
+    TranscriptionView,
 )
 
 router = DefaultRouter()
@@ -21,4 +22,5 @@ router.register(r'flags', CheatingFlagViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path("transcriptions/", TranscriptionView.as_view(), name="transcriptions"),
 ]

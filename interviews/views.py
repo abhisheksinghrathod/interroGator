@@ -2,10 +2,12 @@
 
 import os
 import logging
+import tempfile
 
 import PyPDF2
 import docx
 import textract
+import whisper
 from django.core.files.storage import default_storage
 from rest_framework import viewsets, status, permissions
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -13,6 +15,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .tasks import (
     generate_question,
@@ -42,6 +45,45 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
+
+# ─── Load Whisper Model at Import ─────────────────────────────────────────────
+# use "tiny" for smallest footprint
+DEVICE = "mps" if os.environ.get("USE_MPS") and hasattr(__import__("torch").backends, "mps") else "cpu"
+WHISPER_MODEL = whisper.load_model("tiny", device=DEVICE)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TranscriptionView(APIView):
+    """
+    POST /api/transcriptions/ → { "transcript": "…" }
+    """
+    permission_classes = [AllowAny]        # ← allow unauthenticated
+    parser_classes     = [MultiPartParser] # for multipart/form‑data
+
+    def post(self, request):
+        audio = request.FILES.get("audio")
+        if not audio:
+            return Response(
+                {"detail": "No audio file provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # write to temp file
+        tf = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
+        for chunk in audio.chunks():
+            tf.write(chunk)
+        tf.flush()
+
+        # run whisper
+        try:
+            result     = WHISPER_MODEL.transcribe(tf.name)
+            transcript = result.get("text", "").strip()
+        except Exception as e:
+            return Response(
+                {"detail": f"Transcription failed: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response({"transcript": transcript})
 
 class ResumeViewSet(viewsets.ModelViewSet):
     queryset = Resume.objects.order_by('-uploaded_at')
